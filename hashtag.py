@@ -62,7 +62,7 @@ class HashtagWhatsapp(object):
                         chat_button.click()
                         return
                 raise NoSuchElementException()
-            except NoSuchElementException, StaleElementReferenceException:
+            except (NoSuchElementException, StaleElementReferenceException):
                 retries += -1
                 time.sleep(timeout)
 
@@ -100,7 +100,7 @@ class HashtagWhatsapp(object):
                 if self._check_date(chat_pane, req_date):
                     return
 
-            except NoSuchElementException, StaleElementReferenceException:
+            except (NoSuchElementException, StaleElementReferenceException):
                 retries += -1
 
     def _hashtagged_messages_gen(self, depth=0, retries=5):
