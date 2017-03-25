@@ -62,7 +62,7 @@ class HashtagWhatsapp(object):
                         chat_button.click()
                         return
                 raise NoSuchElementException()
-            except NoSuchElementException:
+            except NoSuchElementException, StaleElementReferenceException:
                 retries += -1
                 time.sleep(timeout)
 
@@ -91,44 +91,53 @@ class HashtagWhatsapp(object):
             try:
                 chat_pane = self.driver.find_element_by_class_name(
                     "pane-chat-msgs")
-                chat_pane.click()
-                if chat_pane.is_selected:
-                    for _ in range(4):
-                        chat_pane.send_keys(u'\ue00e')
-                        time.sleep(0.05)
-                    if self._check_date(chat_pane, req_date):
-                        return
+                if not chat_pane.is_selected():
+                    chat_pane.click()
 
-            except NoSuchElementException:
+                for _ in range(4):
+                    chat_pane.send_keys(u'\ue00e')
+                    time.sleep(0.05)
+                if self._check_date(chat_pane, req_date):
+                    return
+
+            except NoSuchElementException, StaleElementReferenceException:
                 retries += -1
 
-    def _hashtagged_messages_gen(self):
+    def _hashtagged_messages_gen(self, depth=0, retries=5):
+        if depth > retries:
+            print("Maximum retries reached for retrieving hashtagged messages")
+            raise SystemExit()
+            
         print("Retrieving Hashtagged Blox")
-        messages = self.driver.find_elements_by_class_name("message-chat")
-        for msg in messages:
-            # Extract message text
-            try:
-                msg_text = msg.find_element_by_class_name("emojitext").text
-            except NoSuchElementException:
-                continue
+        try:
+            messages = self.driver.find_elements_by_class_name("message-chat")
+            for msg in messages:
+                # Extract message text
+                try:
+                    msg_text = msg.find_element_by_class_name("emojitext").text
+                except NoSuchElementException:
+                    continue
 
-            # Extract message author
-            try:
-                msg_author = msg.find_element_by_class_name(
-                    "screen-name-text").text
-            except NoSuchElementException:
-                msg_author = "Continued msg"
+                # Extract message author
+                try:
+                    msg_author = msg.find_element_by_class_name(
+                        "screen-name-text").text
+                except NoSuchElementException:
+                    msg_author = "Continued msg"
 
-            # Check for hashtags
-            if "#" in msg_text:
-                yield msg_text, msg_author
+                # Check for hashtags
+                if "#" in msg_text:
+                    yield msg_text, msg_author
+        except StaleElementReferenceException:
+            print("References became stale, redoing generation")
+            self._hashtagged_messages_gen(depth=depth+1)
 
     def print_all_hashtagged_messages(self):
         """
         Print all messages available on the screen containing hashtags
         """
         for message, author in self._hashtagged_messages_gen():
-            print(message + "  -" + author)
+            print("\n" + message + "  -" + author)
 
 
 def main(from_date):
