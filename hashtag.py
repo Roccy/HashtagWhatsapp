@@ -29,7 +29,7 @@ class HashtagWhatsapp(object):
         """
         Wait for the login screen with the QR-code
         """
-
+        print("Waiting to pass login screen")
         while True:
             try:
                 time.sleep(self.WAIT_FOR_LOGIN_REFRESH_RATE)
@@ -56,7 +56,7 @@ class HashtagWhatsapp(object):
                 time.sleep(timeout)
 
     def scroll_back_to_date(self, req_date, retries=5):
-        print("Executing scroll")
+        print("Bloxecuting scroll")
         while retries >= 0:
             try:
                 chat_pane = self.driver.find_element_by_class_name("pane-chat-msgs")
@@ -75,7 +75,7 @@ class HashtagWhatsapp(object):
                                 continue
                             found_date = datetime.strptime(date, "%m/%d/%Y")   
                             if found_date < req_date:
-                                print("Scrolled back enough")
+                                print("Bloxxed back enough")
                                 return
 
                     except StaleElementReferenceException:
@@ -83,11 +83,37 @@ class HashtagWhatsapp(object):
             except NoSuchElementException:
                 retries += -1
 
+    def _hashtagged_messages_gen(self):
+        print("Retrieving Hashtagged Blox")
+        messages = self.driver.find_elements_by_class_name("message-chat")
+        for msg in messages:
+            # Extract message text
+            try:
+                msg_text = msg.find_element_by_class_name("emojitext").text
+            except NoSuchElementException:
+                continue
+
+            # Extract message author
+            try:
+                msg_author = msg.find_element_by_class_name("screen-name-text").text
+            except NoSuchElementException:
+                msg_author = "Continued msg"
+
+            # Check for hashtags 
+            if "#" in msg_text:
+                yield msg_text, msg_author
+
+    def print_all_hashtagged_messages(self):
+        for message, author in self._hashtagged_messages_gen():
+            print(message + "  -" + author)
+
+
 def main(from_date):
     hw = HashtagWhatsapp()
     hw.wait_for_login()
     hw.select_chat(CHAT_NAME)
     date = parse_to_date(from_date)
     hw.scroll_back_to_date(date)
+    hw.print_all_hashtagged_messages()
 
-main("4/20/2016")
+main("1/1/2017")
