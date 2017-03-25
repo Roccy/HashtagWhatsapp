@@ -5,6 +5,7 @@ Hashtag scraper for use on Whatsapp Web
 """
 import os
 import time
+import argparse
 
 from datetime import datetime
 
@@ -13,7 +14,7 @@ from selenium.common.exceptions import NoSuchElementException,\
         StaleElementReferenceException
 
 
-CHAT_NAME = "Steen"
+DEFAULT_CHAT_NAME = "Steen"
 
 
 def parse_to_date(date):
@@ -107,7 +108,7 @@ class HashtagWhatsapp(object):
         if depth > retries:
             print("Maximum retries reached for retrieving hashtagged messages")
             raise SystemExit()
-            
+
         print("Retrieving Hashtagged Blox")
         try:
             messages = self.driver.find_elements_by_class_name("message-chat")
@@ -140,16 +141,30 @@ class HashtagWhatsapp(object):
             print("\n" + message + "  -" + author)
 
 
-def main(from_date):
+def main(from_date, chat=DEFAULT_CHAT_NAME):
     geckodriver_path = os.path.dirname(os.path.realpath(__file__))
     os.environ["PATH"] += os.pathsep + geckodriver_path
 
     hw = HashtagWhatsapp()
     hw.wait_for_login()
-    hw.select_chat(CHAT_NAME)
+    hw.select_chat(chat)
     date = parse_to_date(from_date)
     hw.scroll_back_to_date(date)
     hw.print_all_hashtagged_messages()
 
 
-main("3/1/2017")
+def create_args():
+    """
+    Set and retrieve commandline arguments using argparse
+    """
+    parser = argparse.ArgumentParser(description='BLOX!')
+    parser.add_argument('from_date', help="date from which messages should be"
+                        "loaded in MM\\DD\\YYYY format")
+    parser.add_argument('-c', '--chat', help="name of the chat to be scraped")
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = create_args()
+    chat = args.chat if args.chat is not None else DEFAULT_CHAT_NAME
+    main(args.from_date, chat=chat)
