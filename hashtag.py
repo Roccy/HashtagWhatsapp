@@ -8,6 +8,7 @@ import time
 import argparse
 
 from datetime import datetime
+from collections import defaultdict
 
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException,\
@@ -104,11 +105,20 @@ class HashtagWhatsapp(object):
             except (NoSuchElementException, StaleElementReferenceException):
                 retries += -1
 
-    def _hashtagged_messages_gen(self, depth=0, retries=5):
-        if depth > retries:
+    def hashtagged_messages_gen(self, retries=5):
+        retry_count = 0
+        while retry_count <= retries:
+            try:
+                yield from self._hashtagged_messages_gen(retry_count)
+                break
+            except StaleElementReferenceException:
+                retry_count += 1
+
+        else:
             print("Maximum retries reached for retrieving hashtagged messages")
             raise SystemExit()
 
+    def _hashtagged_messages_gen(self, i):
         print("Retrieving Hashtagged Blox")
         try:
             messages = self.driver.find_elements_by_class_name("message-chat")
@@ -130,18 +140,29 @@ class HashtagWhatsapp(object):
                 if "#" in msg_text:
                     yield msg_text, msg_author
         except StaleElementReferenceException:
-            print("References became stale, redoing generation")
-            self._hashtagged_messages_gen(depth=depth+1)
+            print("References became stale, redoing generation\n-------------")
+            raise
+
+    def print_hashtagged_msgs_grouped(self):
+        grouped_by_hashtagee = defaultdict(list)
+        for message, author in self.hashtagged_messages_gen():
+            hashtagee = message[message.index("#"):]
+            grouped_by_hashtagee[hashtagee].append((message, author))
+
+        for group, messages in grouped_by_hashtagee.items():
+            print("\n%s:" % group)
+            for msg, author in messages:
+                print("%s  -%s" % (msg, author))
 
     def print_all_hashtagged_messages(self):
         """
         Print all messages available on the screen containing hashtags
         """
-        for message, author in self._hashtagged_messages_gen():
+        for message, author in self.hashtagged_messages_gen():
             print("\n" + message + "  -" + author)
 
 
-def main(from_date, chat=DEFAULT_CHAT_NAME):
+def main(from_date, chat=DEFAULT_CHAT_NAME, grouped=False):
     geckodriver_path = os.path.dirname(os.path.realpath(__file__))
     os.environ["PATH"] += os.pathsep + geckodriver_path
 
@@ -150,7 +171,10 @@ def main(from_date, chat=DEFAULT_CHAT_NAME):
     hw.select_chat(chat)
     date = parse_to_date(from_date)
     hw.scroll_back_to_date(date)
-    hw.print_all_hashtagged_messages()
+    if grouped:
+        hw.print_hashtagged_msgs_grouped()
+    else:
+        hw.print_all_hashtagged_messages()
 
 
 def create_args():
@@ -161,10 +185,12 @@ def create_args():
     parser.add_argument('from_date', help="date from which messages should be"
                         "loaded in MM\\DD\\YYYY format")
     parser.add_argument('-c', '--chat', help="name of the chat to be scraped")
+    parser.add_argument('-g', help="group messages by hashtagee", action='store_true')
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = create_args()
     chat = args.chat if args.chat is not None else DEFAULT_CHAT_NAME
-    main(args.from_date, chat=chat)
+    grouped = args.g
+    main(args.from_date, chat=chat, grouped=grouped)
