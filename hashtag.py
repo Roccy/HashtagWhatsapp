@@ -10,6 +10,7 @@ import argparse
 from datetime import datetime
 from collections import defaultdict
 
+from dateutil.parser import parse as parse_date
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException,\
         StaleElementReferenceException
@@ -20,9 +21,9 @@ DEFAULT_CHAT_NAME = "Steen"
 
 def parse_to_date(date):
     """
-    Parse date following MM/DD/YYYY
+    Parse date using dateutil
     """
-    return datetime.strptime(date, "%m/%d/%Y")
+    return parse_date(date)
 
 
 class HashtagWhatsapp(object):
@@ -170,6 +171,7 @@ def main(from_date, chat=DEFAULT_CHAT_NAME, grouped=False):
     hw.wait_for_login()
     hw.select_chat(chat)
     date = parse_to_date(from_date)
+    print("DATE: %s" % date)
     hw.scroll_back_to_date(date)
     if grouped:
         hw.print_hashtagged_msgs_grouped()
