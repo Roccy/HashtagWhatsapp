@@ -142,7 +142,7 @@ class HashtagWhatsapp(object):
                     # Extract message text
                     try:
                         msg_text = msg.find_element_by_class_name(
-                            "message-text").text
+                            "message-text").text.rstrip()
                     except NoSuchElementException:
                         continue
 
@@ -177,7 +177,7 @@ class HashtagWhatsapp(object):
                 msg_text = "%s\n%s" % (
                     msg_text,
                     cont_msg.find_element_by_class_name(
-                        "message-text").text)
+                        "message-text").text.rstrip())
             except NoSuchElementException:
                 pass
 
@@ -185,10 +185,10 @@ class HashtagWhatsapp(object):
                 msg_author = self._get_author(cont_msg)
 
             if '#' in msg_text:
-                yield msg_text, msg_author
+                yield "%s" % msg_text, msg_author
                 msg_text = ""
 
-        yield msg_text, msg_author
+        yield "%s" % msg_text, msg_author
 
     def _get_author(self, elem):
         try:
@@ -196,34 +196,56 @@ class HashtagWhatsapp(object):
                 "message-author")
             if "title-number" in author_elem.get_attribute("class"):
                 msg_author = author_elem.find_element_by_class_name(
-                    "screen-name").text
+                    "screen-name").text.rstrip()
             else:
                 msg_author = author_elem.find_element_by_class_name(
-                    "text-clickable").text
+                    "text-clickable").text.rstrip()
         except NoSuchElementException:
             msg_author = ""
+            try:
+                if "message-out" in elem.get_attribute("class"):
+                    msg_author = "Me"
+            except NoSuchElementException:
+                pass
+
         return msg_author
 
-    def print_hashtagged_msgs_grouped(self):
+    def _strip_hashtag(self, hashtag):
+        stripped = "".join(hashtag.split())
+        lower_case = stripped.lower()
+        proper_case = "".join((lower_case[:2].upper(), lower_case[2:]))
+        return proper_case
+
+    def find_hashtagged_msgs_grouped(self):
         grouped_by_hashtagee = defaultdict(list)
         for message, author in self.hashtagged_messages_gen():
-            hashtagee = message[message.index("#"):]
+            hashtagee = self._strip_hashtag(message[message.index("#"):])
             grouped_by_hashtagee[hashtagee].append((message, author))
 
         for group, messages in grouped_by_hashtagee.items():
-            print("\n%s:" % group)
+            yield "\n\n\n%s:" % group
+            yield "\n====="
             for msg, author in messages:
-                print("%s  -%s" % (msg, author))
+                yield "\n%s  -%s" % (msg, author)
 
-    def print_all_hashtagged_messages(self):
+    def find_all_hashtagged_messages(self):
         """
         Print all messages available on the screen containing hashtags
         """
         for message, author in self.hashtagged_messages_gen():
-            print("\n" + message + "  -" + author)
+            yield "\n" + message + "  -" + author
+
+    def print_to_stdout(self, gen):
+        for msg in gen:
+            print(msg)
+
+    def print_to_file(self, gen, path):
+        with open(path, 'w+') as f:
+            for msg in gen:
+                f.write(msg)
 
 
-def main(from_date, chat=DEFAULT_CHAT_NAME, grouped=False):
+def main(from_date, chat=DEFAULT_CHAT_NAME, grouped=False, to_file=None):
     geckodriver_path = os.path.dirname(os.path.realpath(__file__))
     os.environ["PATH"] += os.pathsep + geckodriver_path
 
@@ -235,9 +257,14 @@ def main(from_date, chat=DEFAULT_CHAT_NAME, grouped=False):
     hw.scroll_back_to_date(date)
 
     if grouped:
-        hw.print_hashtagged_msgs_grouped()
+        msgs_ = hw.find_hashtagged_msgs_grouped()
     else:
-        hw.print_all_hashtagged_messages()
+        msgs_ = hw.find_all_hashtagged_messages()
+
+    if to_file:
+        hw.print_to_file(msgs_, to_file)
+    else:
+        hw.print_to_stdout(msgs_)
 
 
 def create_args():
@@ -249,6 +276,7 @@ def create_args():
                         "loaded in MM\\DD\\YYYY format")
     parser.add_argument('-c', '--chat', help="name of the chat to be scraped")
     parser.add_argument('-g', help="group messages by hashtagee", action='store_true')
+    parser.add_argument('-f', '--file', help="write to file")
     return parser.parse_args()
 
 
@@ -256,4 +284,5 @@ if __name__ == "__main__":
     args = create_args()
     chat = args.chat if args.chat is not None else DEFAULT_CHAT_NAME
     grouped = args.g
-    main(args.from_date, chat=chat, grouped=grouped)
+    to_file = args.file
+    main(args.from_date, chat=chat, grouped=grouped, to_file=to_file)
