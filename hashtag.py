@@ -141,7 +141,7 @@ class HashtagWhatsapp(object):
                 if not len(tail):
                     # Extract message text
                     try:
-                        msg_text = msg.find_element_by_class_name(
+                        msg_text = "%s\n" % msg.find_element_by_class_name(
                             "message-text").text.rstrip()
                     except NoSuchElementException:
                         continue
@@ -169,6 +169,18 @@ class HashtagWhatsapp(object):
             print("References became stale, redoing generation\n-------------")
             raise
 
+    def find_hashtagged_msgs_grouped(self):
+        grouped_by_hashtagee = defaultdict(list)
+        for message, author in self.hashtagged_messages_gen():
+            hashtagee = self._strip_hashtag(message[message.index("#"):])
+            grouped_by_hashtagee[hashtagee].append((message, author))
+
+        for group, messages in grouped_by_hashtagee.items():
+            yield "\n\n\n%s:\n" % group
+            yield "=====\n"
+            for msg, author in messages:
+                yield "%s  -%s\n" % (msg, author)
+
     def _cont_message_joining(self, tail):
         msg_text = ""
         msg_author = ""
@@ -185,7 +197,7 @@ class HashtagWhatsapp(object):
                 msg_author = self._get_author(cont_msg)
 
             if '#' in msg_text:
-                yield "%s" % msg_text, msg_author
+                yield "%s\n" % msg_text, msg_author
                 msg_text = ""
 
         yield "%s" % msg_text, msg_author
@@ -216,18 +228,6 @@ class HashtagWhatsapp(object):
         proper_case = "".join((lower_case[:2].upper(), lower_case[2:]))
         return proper_case
 
-    def find_hashtagged_msgs_grouped(self):
-        grouped_by_hashtagee = defaultdict(list)
-        for message, author in self.hashtagged_messages_gen():
-            hashtagee = self._strip_hashtag(message[message.index("#"):])
-            grouped_by_hashtagee[hashtagee].append((message, author))
-
-        for group, messages in grouped_by_hashtagee.items():
-            yield "\n\n\n%s:" % group
-            yield "\n====="
-            for msg, author in messages:
-                yield "\n%s  -%s" % (msg, author)
-
     def find_all_hashtagged_messages(self):
         """
         Print all messages available on the screen containing hashtags
@@ -240,6 +240,7 @@ class HashtagWhatsapp(object):
             print(msg)
 
     def print_to_file(self, gen, path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'w+') as f:
             for msg in gen:
                 f.write(msg)
