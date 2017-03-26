@@ -110,7 +110,7 @@ class HashtagWhatsapp(object):
         retry_count = 0
         while retry_count <= retries:
             try:
-                yield from self._hashtagged_messages_gen(retry_count)
+                yield from self._hashtagged_messages_gen()
                 break
             except StaleElementReferenceException:
                 retry_count += 1
@@ -119,30 +119,78 @@ class HashtagWhatsapp(object):
             print("Maximum retries reached for retrieving hashtagged messages")
             raise SystemExit()
 
-    def _hashtagged_messages_gen(self, i):
+    def _hashtagged_messages_gen(self):
         print("Retrieving Hashtagged Blox")
         try:
-            messages = self.driver.find_elements_by_class_name("message-chat")
+            messages = self.driver.find_elements_by_class_name("msg")
+            continued_msgs = self.driver.find_elements_by_class_name("msg-continuation")
+
+            tail = []
             for msg in messages:
-                # Extract message text
                 try:
-                    msg_text = msg.find_element_by_class_name("emojitext").text
+                    inner_msg = msg.find_element_by_class_name("message-chat")
                 except NoSuchElementException:
                     continue
 
-                # Extract message author
-                try:
-                    msg_author = msg.find_element_by_class_name(
-                        "screen-name-text").text
-                except NoSuchElementException:
-                    msg_author = "Continued msg"
+                if msg in continued_msgs:
+                    tail.append(inner_msg)
+                    continue
+    
+                msg = inner_msg
+                if not len(tail):
+                    # Extract message text
+                    try:
+                        msg_text = msg.find_element_by_class_name(
+                                "message-text").text
+                    except NoSuchElementException:
+                        continue
+
+                    # Extract message author
+                    try:
+                        msg_author = self._get_author(msg)
+                    except NoSuchElementException:
+                        msg_author = "Continued msg"
+
+                else:
+                    tail.append(msg)
+                    msg_text, msg_author = self._cont_message_joining(tail)
 
                 # Check for hashtags
                 if "#" in msg_text:
                     yield msg_text, msg_author
+                tail = []
+
+
         except StaleElementReferenceException:
             print("References became stale, redoing generation\n-------------")
             raise
+
+    def _cont_message_joining(self, tail):
+        msg_text = ""
+        for cont_msg in tail:
+            try:
+                msg_text = "%s\n%s" % (
+                    msg_text,
+                    cont_msg.find_element_by_class_name(
+                        "message-text").text)
+            except NoSuchElementException:
+                pass
+            
+            msg_author = self._get_author(cont_msg)
+
+        return msg_text, msg_author
+
+    def _get_author(self, elem):
+        try:
+            author_elem = elem.find_element_by_class_name(
+                    "message-author")
+            if "title-number" in author_elem.get_attribute("class"):
+                msg_author = author_elem.find_element_by_class_name("screen-name").text
+            else:
+                msg_author = author_elem.find_element_by_class_name("text-clickable").text
+        except NoSuchElementException:
+            msg_author = ""
+        return msg_author
 
     def print_hashtagged_msgs_grouped(self):
         grouped_by_hashtagee = defaultdict(list)
@@ -170,9 +218,10 @@ def main(from_date, chat=DEFAULT_CHAT_NAME, grouped=False):
     hw = HashtagWhatsapp()
     hw.wait_for_login()
     hw.select_chat(chat)
+
     date = parse_to_date(from_date)
-    print("DATE: %s" % date)
     hw.scroll_back_to_date(date)
+
     if grouped:
         hw.print_hashtagged_msgs_grouped()
     else:
