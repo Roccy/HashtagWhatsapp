@@ -51,7 +51,7 @@ class HashtagWhatsapp(object):
                 time.sleep(self.WAIT_FOR_LOGIN_REFRESH_RATE)
                 break
 
-    def select_chat(self, chat, retries=5, timeout=2.0):
+    def select_chat(self, chat_, retries=5, timeout=2.0):
         """
         Select chat with the given name
         """
@@ -60,7 +60,7 @@ class HashtagWhatsapp(object):
                 chat_buttons = self.driver.find_elements_by_class_name(
                     "chat-title")
                 for chat_button in chat_buttons:
-                    if chat_button.text == chat:
+                    if chat_button.text == chat_:
                         print("Found %s" % chat)
                         chat_button.click()
                         return
@@ -123,7 +123,8 @@ class HashtagWhatsapp(object):
         print("Retrieving Hashtagged Blox")
         try:
             messages = self.driver.find_elements_by_class_name("msg")
-            continued_msgs = self.driver.find_elements_by_class_name("msg-continuation")
+            continued_msgs = self.driver.find_elements_by_class_name(
+                "msg-continuation")
 
             tail = []
             for msg in messages:
@@ -135,13 +136,13 @@ class HashtagWhatsapp(object):
                 if msg in continued_msgs:
                     tail.append(inner_msg)
                     continue
-    
+
                 msg = inner_msg
                 if not len(tail):
                     # Extract message text
                     try:
                         msg_text = msg.find_element_by_class_name(
-                                "message-text").text
+                            "message-text").text
                     except NoSuchElementException:
                         continue
 
@@ -151,15 +152,18 @@ class HashtagWhatsapp(object):
                     except NoSuchElementException:
                         msg_author = "Continued msg"
 
+                    # Check for hashtags
+                    if "#" in msg_text:
+                        yield msg_text, msg_author
+
                 else:
                     tail.append(msg)
-                    msg_text, msg_author = self._cont_message_joining(tail)
+                    for msg_text, msg_author in self._cont_message_joining(tail):
+                        # Check for hashtags
+                        if "#" in msg_text:
+                            yield msg_text, msg_author
 
-                # Check for hashtags
-                if "#" in msg_text:
-                    yield msg_text, msg_author
                 tail = []
-
 
         except StaleElementReferenceException:
             print("References became stale, redoing generation\n-------------")
@@ -167,6 +171,7 @@ class HashtagWhatsapp(object):
 
     def _cont_message_joining(self, tail):
         msg_text = ""
+        msg_author = ""
         for cont_msg in tail:
             try:
                 msg_text = "%s\n%s" % (
@@ -175,19 +180,26 @@ class HashtagWhatsapp(object):
                         "message-text").text)
             except NoSuchElementException:
                 pass
-            
-            msg_author = self._get_author(cont_msg)
 
-        return msg_text, msg_author
+            if msg_author == "":
+                msg_author = self._get_author(cont_msg)
+
+            if '#' in msg_text:
+                yield msg_text, msg_author
+                msg_text = ""
+
+        yield msg_text, msg_author
 
     def _get_author(self, elem):
         try:
             author_elem = elem.find_element_by_class_name(
-                    "message-author")
+                "message-author")
             if "title-number" in author_elem.get_attribute("class"):
-                msg_author = author_elem.find_element_by_class_name("screen-name").text
+                msg_author = author_elem.find_element_by_class_name(
+                    "screen-name").text
             else:
-                msg_author = author_elem.find_element_by_class_name("text-clickable").text
+                msg_author = author_elem.find_element_by_class_name(
+                    "text-clickable").text
         except NoSuchElementException:
             msg_author = ""
         return msg_author
