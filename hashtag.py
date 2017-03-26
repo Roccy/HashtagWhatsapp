@@ -28,6 +28,7 @@ def parse_to_date(date):
 
 class HashtagWhatsapp(object):
     """
+    Hashtag Detection in Whatsapp Web
     """
 
     URL = "https://web.whatsapp.com/"
@@ -61,7 +62,7 @@ class HashtagWhatsapp(object):
                     "chat-title")
                 for chat_button in chat_buttons:
                     if chat_button.text == chat_:
-                        print("Found %s" % chat)
+                        print("Found %s" % chat_)
                         chat_button.click()
                         return
                 raise NoSuchElementException()
@@ -69,7 +70,8 @@ class HashtagWhatsapp(object):
                 retries += -1
                 time.sleep(timeout)
 
-    def _check_date(self, chat_pane, req_date):
+    @staticmethod
+    def _check_date(chat_pane, req_date):
         system_msgs = chat_pane.find_elements_by_class_name("message-system")
         try:
             for sysmsg in system_msgs:
@@ -107,6 +109,10 @@ class HashtagWhatsapp(object):
                 retries += -1
 
     def hashtagged_messages_gen(self, retries=5):
+        """
+        Retrieve all hashtagged messages and yield them
+        Retry from the start after StaleElementReferenceException
+        """
         retry_count = 0
         while retry_count <= retries:
             try:
@@ -158,7 +164,8 @@ class HashtagWhatsapp(object):
 
                 else:
                     tail.append(msg)
-                    for msg_text, msg_author in self._cont_message_joining(tail):
+                    for msg_text, msg_author \
+                            in self._cont_message_joining(tail):
                         # Check for hashtags
                         if "#" in msg_text:
                             yield msg_text, msg_author
@@ -170,6 +177,9 @@ class HashtagWhatsapp(object):
             raise
 
     def find_hashtagged_msgs_grouped(self):
+        """
+        Yield all hashtagged messages sorted by hashtagee
+        """
         grouped_by_hashtagee = defaultdict(list)
         for message, author in self.hashtagged_messages_gen():
             hashtagee = self._strip_hashtag(message[message.index("#"):])
@@ -202,7 +212,8 @@ class HashtagWhatsapp(object):
 
         yield "%s" % msg_text, msg_author
 
-    def _get_author(self, elem):
+    @staticmethod
+    def _get_author(elem):
         try:
             author_elem = elem.find_element_by_class_name(
                 "message-author")
@@ -222,7 +233,8 @@ class HashtagWhatsapp(object):
 
         return msg_author
 
-    def _strip_hashtag(self, hashtag):
+    @staticmethod
+    def _strip_hashtag(hashtag):
         stripped = "".join(hashtag.split())
         lower_case = stripped.lower()
         proper_case = "".join((lower_case[:2].upper(), lower_case[2:]))
@@ -235,35 +247,47 @@ class HashtagWhatsapp(object):
         for message, author in self.hashtagged_messages_gen():
             yield "\n" + message + "  -" + author
 
-    def print_to_stdout(self, gen):
+    @staticmethod
+    def print_to_stdout(gen):
+        """
+        Print given generator to stdout
+        """
         for msg in gen:
             print(msg)
 
-    def print_to_file(self, gen, path):
+    @staticmethod
+    def print_to_file(gen, path):
+        """
+        Write given generator to file specified in path.
+        Creates a directory if it does not exist
+        """
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, 'w+') as f:
+        with open(path, 'w+') as file_:
             for msg in gen:
-                f.write(msg)
+                file_.write(msg)
 
 
-def main(from_date, chat=DEFAULT_CHAT_NAME, grouped=False, to_file=None):
+def _main(from_date, chat_=DEFAULT_CHAT_NAME, grouped_=False, to_file_=None):
+    """
+    Use HashtagWhatsapp on given chat and print
+    """
     geckodriver_path = os.path.dirname(os.path.realpath(__file__))
     os.environ["PATH"] += os.pathsep + geckodriver_path
 
-    hw = HashtagWhatsapp()
+    hw = HashtagWhatsapp()  # pylint: disable=invalid-name
     hw.wait_for_login()
-    hw.select_chat(chat)
+    hw.select_chat(chat_)
 
     date = parse_to_date(from_date)
     hw.scroll_back_to_date(date)
 
-    if grouped:
+    if grouped_:
         msgs_ = hw.find_hashtagged_msgs_grouped()
     else:
         msgs_ = hw.find_all_hashtagged_messages()
 
-    if to_file:
-        hw.print_to_file(msgs_, to_file)
+    if to_file_:
+        hw.print_to_file(msgs_, to_file_)
     else:
         hw.print_to_stdout(msgs_)
 
@@ -276,14 +300,19 @@ def create_args():
     parser.add_argument('from_date', help="date from which messages should be"
                         "loaded in MM\\DD\\YYYY format")
     parser.add_argument('-c', '--chat', help="name of the chat to be scraped")
-    parser.add_argument('-g', help="group messages by hashtagee", action='store_true')
+    parser.add_argument('-g', help="group messages by hashtagee",
+                        action='store_true')
     parser.add_argument('-f', '--file', help="write to file")
     return parser.parse_args()
 
 
-if __name__ == "__main__":
+def main():  # pylint: disable=missing-docstring
     args = create_args()
     chat = args.chat if args.chat is not None else DEFAULT_CHAT_NAME
     grouped = args.g
     to_file = args.file
-    main(args.from_date, chat=chat, grouped=grouped, to_file=to_file)
+    _main(args.from_date, chat_=chat, grouped_=grouped, to_file_=to_file)
+
+
+if __name__ == "__main__":
+    main()
